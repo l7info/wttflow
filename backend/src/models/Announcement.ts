@@ -28,7 +28,6 @@ class Announcement extends Model<Announcement> {
   @Column(DataType.TEXT)
   text: string;
 
-
   @Column
   get mediaPath(): string | null {
     if (this.getDataValue("mediaPath")) {

@@ -1,107 +1,91 @@
 import React, { useState, useEffect, useContext } from "react";
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import api from "../../services/api";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import Board from 'react-trello';
 import { toast } from "react-toastify";
-import LaneTitle from "../../components/Kanban/LaneTitle";
-import CardTitle from "../../components/Kanban/CardTitle";
-import FooterButtons from "../../components/Kanban/FooterButtons";
-import {
-  IconButton,
-  Menu,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Tooltip
-} from "@material-ui/core";
-import { MoreVert, Archive, Delete } from "@material-ui/icons";
+import { i18n } from "../../translate/i18n";
+import { useHistory } from 'react-router-dom';
+import { Facebook, Instagram, WhatsApp } from "@material-ui/icons";
+import { Badge, Tooltip, Typography, Button, TextField, Box } from "@material-ui/core";
+import { format, isSameDay, parseISO } from "date-fns";
+import { Can } from "../../components/Can";
 
 const useStyles = makeStyles(theme => ({
   root: {
     display: "flex",
-    padding: theme.spacing(2),
-    height: "calc(100vh - 64px)",
-    backgroundColor: "#f5f7fa",
-    fontFamily: "'Roboto', sans-serif",
-    overflow: "hidden",
-    [theme.breakpoints.down('sm')]: {
-      height: "auto",
-      minHeight: "100vh",
-      padding: theme.spacing(1),
-    }
+    flexDirection: "column",
+    alignItems: "center",
+    padding: theme.spacing(1),
   },
-  boardContainer: {
+  kanbanContainer: {
     width: "100%",
-    "& .smooth-dnd-container": {
-      minHeight: "60vh",
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  connectionTag: {
+    background: "green",
+    color: "#FFF",
+    marginRight: 1,
+    padding: 1,
+    fontWeight: 'bold',
+    borderRadius: 3,
+    fontSize: "0.6em",
+  },
+  lastMessageTime: {
+    justifySelf: "flex-end",
+    textAlign: "right",
+    position: "relative",
+    marginLeft: "auto",
+    color: theme.palette.text.secondary,
+  },
+  lastMessageTimeUnread: {
+    justifySelf: "flex-end",
+    textAlign: "right",
+    position: "relative",
+    color: theme.palette.success.main,
+    fontWeight: "bold",
+    marginLeft: "auto"
+  },
+  cardButton: {
+    marginRight: theme.spacing(1),
+    color: theme.palette.common.white,
+    backgroundColor: theme.palette.primary.main,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
     },
-    "& .react-trello-lane": {
-      backgroundColor: "white",
-      borderRadius: "8px",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-      margin: "0 8px",
-      [theme.breakpoints.down('sm')]: {
-        margin: "8px 0",
-        width: "100% !important",
-      }
-    },
-    "& .react-trello-card": {
-      borderRadius: "6px",
-      marginBottom: "8px",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-      transition: "all 0.2s ease",
-      "&:hover": {
-        transform: "translateY(-2px)",
-        boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
-      }
-    },
-    "& .react-trello-card-draggable": {
-      cursor: "grab",
-    },
-    "& .react-trello-card-title": {
-      fontSize: "14px",
-      fontWeight: "500",
-      color: "#333",
-    },
-    "& .react-trello-lane-header": {
-      padding: "12px 16px",
-      fontWeight: "600",
-      fontSize: "16px",
-    },
-    cardActions: {
-      display: "flex",
-      justifyContent: "flex-end",
-      padding: "8px 0 0 0",
-    },
-  }
+  },
+  dateInput: {
+    marginRight: theme.spacing(2),
+  },
 }));
 
 const Kanban = () => {
   const classes = useStyles();
-  const { user } = useContext(AuthContext);
-  const jsonString = user.queues.map(queue => queue.UserQueue.queueId);
-  
+  const theme = useTheme(); // Obter o tema atual
+  const history = useHistory();
+  const { user, socket } = useContext(AuthContext);
   const [tags, setTags] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [laneQuantities, setLaneQuantities] = useState({});
+  const [ticketNot, setTicketNot] = useState(0);
   const [file, setFile] = useState({ lanes: [] });
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedTicket, setSelectedTicket] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [actionType, setActionType] = useState('');
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  const jsonString = user.queues.map(queue => queue.UserQueue.queueId);
+
+  useEffect(() => {
+    fetchTags();
+  }, [user]);
 
   const fetchTags = async () => {
     try {
-      const response = await api.get("/tags/kanban");
-      const fetchedTags = response.data.lista || []; 
+      const response = await api.get("/tag/kanban/");
+      const fetchedTags = response.data.lista || [];
       setTags(fetchedTags);
+      fetchTickets();
     } catch (error) {
       console.log(error);
-      toast.error("Erro ao carregar tags");
     }
   };
 
@@ -110,215 +94,232 @@ const Kanban = () => {
       const { data } = await api.get("/ticket/kanban", {
         params: {
           queueIds: JSON.stringify(jsonString),
-          teste: true
+          startDate: startDate,
+          endDate: endDate,
         }
       });
       setTickets(data.tickets);
     } catch (err) {
       console.log(err);
-      toast.error("Erro ao carregar tickets");
       setTickets([]);
     }
   };
 
-  const handleMenuClick = (event, ticket) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedTicket(ticket);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleActionClick = (type) => {
-    setActionType(type);
-    setOpenDialog(true);
-    handleMenuClose();
-  };
-
-  const handleDialogClose = () => {
-    setOpenDialog(false);
-    setSelectedTicket(null);
-  };
-
-  const confirmAction = async () => {
-    try {
-      if (actionType === 'archive') {
-        // Remove todas as tags sem deletar o ticket
-        await api.delete(`/ticket-tags/${selectedTicket.id}`);
-        toast.success('Ticket arquivado com sucesso');
-      } else if (actionType === 'delete') {
-        // Aqui você pode implementar a lógica para deletar se necessário
-        // await api.delete(`/tickets/${selectedTicket.id}`);
-        toast.error('Função de deletar desativada para proteger as conversas');
+  useEffect(() => {
+    const companyId = user.companyId;
+    const onAppMessage = (data) => {
+      if (data.action === "create" || data.action === "update" || data.action === "delete") {
+        fetchTickets();
       }
-      
-      fetchTickets();
-      fetchTags();
-    } catch (err) {
-      console.log(err);
-      toast.error('Erro ao processar ação');
-    } finally {
-      handleDialogClose();
+    };
+    socket.on(`company-${companyId}-ticket`, onAppMessage);
+    socket.on(`company-${companyId}-appMessage`, onAppMessage);
+
+    return () => {
+      socket.off(`company-${companyId}-ticket`, onAppMessage);
+      socket.off(`company-${companyId}-appMessage`, onAppMessage);
+    };
+  }, [socket, startDate, endDate]);
+
+  const handleSearchClick = () => {
+    fetchTickets();
+  };
+
+  const handleStartDateChange = (event) => {
+    setStartDate(event.target.value);
+  };
+
+  const handleEndDateChange = (event) => {
+    setEndDate(event.target.value);
+  };
+
+  const IconChannel = (channel) => {
+    switch (channel) {
+      case "facebook":
+        return <Facebook style={{ color: "#3b5998", verticalAlign: "middle", fontSize: "16px" }} />;
+      case "instagram":
+        return <Instagram style={{ color: "#e1306c", verticalAlign: "middle", fontSize: "16px" }} />;
+      case "whatsapp":
+        return <WhatsApp style={{ color: "#25d366", verticalAlign: "middle", fontSize: "16px" }} />
+      default:
+        return "error";
     }
   };
 
-  useEffect(() => {
-    fetchTags();
-    fetchTickets();
-  }, []);
+  const popularCards = (jsonString) => {
+    const filteredTickets = tickets.filter(ticket => ticket.tags.length === 0);
 
-  useEffect(() => {
-    const newQuantities = {};
-
-    newQuantities["0"] = tickets.filter(ticket => ticket.tags.length === 0).length;
-
-    tags.forEach(tag => {
-      const count = tickets.filter(ticket => ticket.tags.some(t => t.id === tag.id)).length;
-      newQuantities[tag.id.toString()] = count;
-    });
-
-    setLaneQuantities(newQuantities);
-  }, [tags, tickets]);
-
-  useEffect(() => {
     const lanes = [
       {
-        id: "0",
-        title: <LaneTitle firstLane quantity={laneQuantities["0"]}>Em aberto</LaneTitle>,
-        style: { 
-          backgroundColor: "#f0f2f5",
-          borderTop: "4px solid #6c757d" 
-        },
-        cards: tickets.filter(ticket => ticket.tags.length === 0).map(ticket => ({
+        id: "lane0",
+        title: i18n.t("tagsKanban.laneDefault"),
+        label: filteredTickets.length.toString(),
+        cards: filteredTickets.map(ticket => ({
           id: ticket.id.toString(),
-          title: <CardTitle ticket={ticket} userProfile={user.profile} />,
-          label: (
-            <div className={classes.cardActions}>
-              <Tooltip title="Ações">
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleMenuClick(e, ticket)}
+          label: "Ticket nº " + ticket.id.toString(),
+          description: (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{ticket.contact.number}</span>
+                <Typography
+                  className={Number(ticket.unreadMessages) > 0 ? classes.lastMessageTimeUnread : classes.lastMessageTime}
+                  component="span"
+                  variant="body2"
                 >
-                  <MoreVert fontSize="small" />
-                </IconButton>
-              </Tooltip>
+                  {isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
+                    <>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
+                  ) : (
+                    <>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
+                  )}
+                </Typography>
+              </div>
+              <div style={{ textAlign: 'left' }}>{ticket.lastMessage || " "}</div>
+              <Button
+                className={`${classes.button} ${classes.cardButton}`}
+                onClick={() => {
+                  handleCardClick(ticket.uuid)
+                }}>
+                Ver Ticket
+              </Button>
+              <span style={{ marginRight: '8px' }} />
+              {ticket?.user && (<Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>{ticket.user?.name.toUpperCase()}</Badge>)}
             </div>
           ),
-          description: <FooterButtons ticket={ticket} />,
+          title: <>
+            <Tooltip title={ticket.whatsapp?.name}>
+              {IconChannel(ticket.channel)}
+            </Tooltip> {ticket.contact.name}</>,
           draggable: true,
           href: "/tickets/" + ticket.uuid,
         })),
       },
-      ...tags.map(tag => ({
-        id: tag.id.toString(),
-        title: <LaneTitle squareColor={tag.color} quantity={laneQuantities[tag.id.toString()]}>{tag.name}</LaneTitle>,
-        style: { 
-          backgroundColor: `${tag.color}10`,
-          borderTop: `4px solid ${tag.color}`
-        },
-        cards: tickets.filter(ticket => ticket.tags.some(t => t.id === tag.id)).map(ticket => ({
-          id: ticket.id.toString(),
-          title: <CardTitle ticket={ticket} userProfile={user.profile} />,
-          label: (
-            <div className={classes.cardActions}>
-              <Tooltip title="Ações">
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleMenuClick(e, ticket)}
-                >
-                  <MoreVert fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </div>
-          ),
-          description: <FooterButtons ticket={ticket} />,
-          draggable: true,
-          href: "/tickets/" + ticket.uuid,
-        })),
-      })),
+      ...tags.map(tag => {
+        const filteredTickets = tickets.filter(ticket => {
+          const tagIds = ticket.tags.map(tag => tag.id);
+          return tagIds.includes(tag.id);
+        });
+
+        return {
+          id: tag.id.toString(),
+          title: tag.name,
+          label: filteredTickets?.length.toString(),
+          cards: filteredTickets.map(ticket => ({
+            id: ticket.id.toString(),
+            label: "Ticket nº " + ticket.id.toString(),
+            description: (
+              <div>
+                <p>
+                  {ticket.contact.number}
+                  <br />
+                  {ticket.lastMessage || " "}
+                </p>
+                <Button
+                  className={`${classes.button} ${classes.cardButton}`}
+                  onClick={() => {
+                    handleCardClick(ticket.uuid)
+                  }}>
+                  Ver Ticket
+                </Button>
+                <span style={{ marginRight: '8px' }} />
+                <p>
+                  {ticket?.user && (<Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>{ticket.user?.name.toUpperCase()}</Badge>)}
+                </p>
+              </div>
+            ),
+            title: <>
+              <Tooltip title={ticket.whatsapp?.name}>
+                {IconChannel(ticket.channel)}
+              </Tooltip> {ticket.contact.name}
+            </>,
+            draggable: true,
+            href: "/tickets/" + ticket.uuid,
+          })),
+          style: { backgroundColor: tag.color, color: "white" }
+        };
+      }),
     ];
 
     setFile({ lanes });
-  }, [tags, tickets, laneQuantities]);
+  };
 
-  const handleCardMove = async (sourceLaneId, targetLaneId, cardId) => {
+  const handleCardClick = (uuid) => {
+    history.push('/tickets/' + uuid);
+  };
+
+  useEffect(() => {
+    popularCards(jsonString);
+  }, [tags, tickets]);
+
+  const handleCardMove = async (cardId, sourceLaneId, targetLaneId) => {
     try {
-      await api.delete(`/ticket-tags/${cardId}`);
-      if(targetLaneId !== "0") {
-        await api.put(`/ticket-tags/${cardId}/${targetLaneId}`);
-      }
-      toast.success('Ticket movido com sucesso');
-      
-      fetchTickets();
-      fetchTags();
+      await api.delete(`/ticket-tags/${targetLaneId}`);
+      toast.success('Ticket Tag Removido!');
+      await api.put(`/ticket-tags/${targetLaneId}/${sourceLaneId}`);
+      toast.success('Ticket Tag Adicionado com Sucesso!');
+      await fetchTickets(jsonString);
+      popularCards(jsonString);
     } catch (err) {
       console.log(err);
-      toast.error('Erro ao mover ticket');
     }
+  };
+
+  const handleAddConnectionClick = () => {
+    history.push('/tagsKanban');
   };
 
   return (
     <div className={classes.root}>
-      <div className={classes.boardContainer}>
-        <Board 
-          data={file} 
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', width: '100%', maxWidth: '1200px' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <TextField
+            label="Data de início"
+            type="date"
+            value={startDate}
+            onChange={handleStartDateChange}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            variant="outlined"
+            className={classes.dateInput}
+          />
+          <Box mx={1} />
+          <TextField
+            label="Data de fim"
+            type="date"
+            value={endDate}
+            onChange={handleEndDateChange}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            variant="outlined"
+            className={classes.dateInput}
+          />
+          <Box mx={1} />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSearchClick}
+          >
+            Buscar
+          </Button>
+        </div>
+        <Can role={user.profile} perform="dashboard:view" yes={() => (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleAddConnectionClick}
+          >
+            {'+ Adicionar colunas'}
+          </Button>
+        )} />
+      </div>
+      <div className={classes.kanbanContainer}>
+        <Board
+          data={file}
           onCardMoveAcrossLanes={handleCardMove}
-          laneStyle={{ 
-            maxHeight: "80vh",
-            minWidth: "280px",
-            width: "280px"
-          }}
-          cardStyle={{
-            backgroundColor: "white",
-            padding: "12px",
-            marginBottom: "12px"
-          }}
-          hideCardDeleteIcon
-          style={{
-            backgroundColor: 'transparent',
-            height: "100%",
-            fontFamily: "'Roboto', sans-serif",
-          }}
-          responsive
-          collapsibleLanes
+          style={{ backgroundColor: 'rgba(252, 252, 252, 0.03)' }}
         />
       </div>
-
-      {/* Menu de ações */}
-      <Menu
-        anchorEl={anchorEl}
-        keepMounted
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItem onClick={() => handleActionClick('archive')}>
-          <Archive fontSize="small" style={{ marginRight: 8 }} />
-          Finalizar
-        </MenuItem>
-      </Menu>
-
-      {/* Dialog de confirmação */}
-      <Dialog open={openDialog} onClose={handleDialogClose}>
-        <DialogTitle>
-          {actionType === 'archive' ? 'Desvincular Ticket' : 'Excluir Ticket'}
-        </DialogTitle>
-        <DialogContent>
-          {actionType === 'archive' ? (
-            <p>Tem certeza que deseja desvincular este ticket de todas as tags kanban? O chat permanecerá intacto.</p>
-          ) : (
-            <p>Atenção: Esta ação é irreversível. Todas as mensagens serão perdidas.</p>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDialogClose} color="primary">
-            Cancelar
-          </Button>
-          <Button onClick={confirmAction} color="secondary" variant="contained">
-            Confirmar
-          </Button>
-        </DialogActions>
-      </Dialog>
     </div>
   );
 };

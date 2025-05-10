@@ -1,20 +1,14 @@
 import { QueryInterface, DataTypes } from "sequelize";
 
 module.exports = {
-  up: async (queryInterface: QueryInterface) => {
-    const tableDescription = await queryInterface.describeTable("Messages");
-    if (!(tableDescription as Record<string, any>).isEdited) {
-      await queryInterface.addColumn("Messages", "isEdited", {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false,
-      });
-    }
+  up: (queryInterface: QueryInterface) => {
+    return queryInterface.addColumn("Messages", "isEdited", {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    });
   },
 
-  down: async (queryInterface: QueryInterface) => {
-    const tableDescription = await queryInterface.describeTable("Messages");
-    if ((tableDescription as Record<string, any>).isEdited) {
-      await queryInterface.removeColumn("Messages", "isEdited");
-    }
+  down: (queryInterface: QueryInterface) => {
+    return queryInterface.removeColumn("Messages", "isEdited");
   }
 };

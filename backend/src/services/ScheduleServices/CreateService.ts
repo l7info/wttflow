@@ -2,7 +2,6 @@ import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
 import Schedule from "../../models/Schedule";
-import Contact from "../../models/Contact";
 
 interface Request {
   body: string;
@@ -10,14 +9,17 @@ interface Request {
   contactId: number | string;
   companyId: number | string;
   userId?: number | string;
-  geral?: boolean;
-  queueId?: number;
-  whatsappId?: number;
-  mediaPath: string | null | undefined;
-  mediaName: string | null | undefined;
-  repeatEvery?:string;
-  selectDaysRecorrenci?: string;
-  repeatCount?:string;
+  ticketUserId?: number | string;
+  queueId?: number | string;
+  openTicket?: string;
+  statusTicket?: string;
+  whatsappId?: number | string;
+  intervalo?: number;
+  valorIntervalo?: number;
+  enviarQuantasVezes?: number;
+  tipoDias?: number;
+  contadorEnvio?: number;
+  assinar?: boolean;
 }
 
 const CreateService = async ({
@@ -26,14 +28,17 @@ const CreateService = async ({
   contactId,
   companyId,
   userId,
-  geral,
+  ticketUserId,
   queueId,
+  openTicket,
+  statusTicket,
   whatsappId,
-  mediaPath,
-  mediaName,
-  repeatEvery,
-  selectDaysRecorrenci,
-  repeatCount,
+  intervalo,
+  valorIntervalo,
+  enviarQuantasVezes,
+  tipoDias,
+  assinar,
+  contadorEnvio
 }: Request): Promise<Schedule> => {
   const schema = Yup.object().shape({
     body: Yup.string().required().min(5),
@@ -46,8 +51,6 @@ const CreateService = async ({
     throw new AppError(err.message);
   }
 
-  const contact = await Contact.findByPk(contactId)
-
   const schedule = await Schedule.create(
     {
       body,
@@ -56,18 +59,21 @@ const CreateService = async ({
       companyId,
       userId,
       status: 'PENDENTE',
-      geral,
-  	  queueId,
+      ticketUserId,
+      queueId,
+      openTicket,
+      statusTicket,
       whatsappId,
-      mediaPath,
-      mediaName,
-      repeatEvery,
-      selectDaysRecorrenci,
-      repeatCount,
+      intervalo,
+      valorIntervalo,
+      enviarQuantasVezes,
+      tipoDias,
+      assinar,
+      contadorEnvio
     }
   );
 
-  await schedule.reload({ include: [Contact] });
+  await schedule.reload();
 
   return schedule;
 };

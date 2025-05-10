@@ -26,7 +26,7 @@ interface WebhookConfig {
         },
         limiter: {
           max: 1,
-          duration: 500,
+          duration: 150,
         },
       },
       // Adicione outras configurações conforme necessário

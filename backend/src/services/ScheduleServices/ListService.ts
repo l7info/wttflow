@@ -1,7 +1,8 @@
-import { Op, Sequelize } from "sequelize";
+import { Op, col, where, fn } from "sequelize";
 import Contact from "../../models/Contact";
 import Schedule from "../../models/Schedule";
 import User from "../../models/User";
+import Whatsapp from "../../models/Whatsapp";
 
 interface Request {
   searchParam?: string;
@@ -9,9 +10,6 @@ interface Request {
   userId?: number | string;
   companyId?: number;
   pageNumber?: string | number;
-  geral?: boolean;
-  queueId?: number;
-  whatsappId?: number;
 }
 
 interface Response {
@@ -25,10 +23,7 @@ const ListService = async ({
   contactId = "",
   userId = "",
   pageNumber = "1",
-  companyId,
-  geral,
-  queueId,
-  whatsappId
+  companyId
 }: Request): Promise<Response> => {
   let whereCondition = {};
   const limit = 20;
@@ -38,15 +33,15 @@ const ListService = async ({
     whereCondition = {
       [Op.or]: [
         {
-          "$Schedule.body$": Sequelize.where(
-            Sequelize.fn("LOWER", Sequelize.col("Schedule.body")),
+          "$Schedule.body$": where(
+            fn("LOWER", col("Schedule.body")),
             "LIKE",
             `%${searchParam.toLowerCase()}%`
           )
         },
         {
-          "$Contact.name$": Sequelize.where(
-            Sequelize.fn("LOWER", Sequelize.col("contact.name")),
+          "$Contact.name$": where(
+            fn("LOWER", fn("unaccent", col("contact.name"))),
             "LIKE",
             `%${searchParam.toLowerCase()}%`
           )
@@ -82,8 +77,9 @@ const ListService = async ({
     offset,
     order: [["createdAt", "DESC"]],
     include: [
-      { model: Contact, as: "contact", attributes: ["id", "name"] },
+      { model: Contact, as: "contact", attributes: ["id", "name", "companyId", "urlPicture"] },
       { model: User, as: "user", attributes: ["id", "name"] },
+      { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "channel"] }
     ]
   });
 

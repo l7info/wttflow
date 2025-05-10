@@ -2,12 +2,10 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
+import { makeStyles } from "@material-ui/core/styles";
 
-import { makeStyles, useTheme } from "@material-ui/core/styles"; // Importando useTheme
-
-import TicketsManager from "../../components/TicketsManager/";
-import Ticket from "../../components/Ticket/";
-
+import TicketsManager from "../../components/TicketsManager";
+import Ticket from "../../components/Ticket";
 
 import { i18n } from "../../translate/i18n";
 
@@ -15,7 +13,8 @@ const useStyles = makeStyles(theme => ({
 	chatContainer: {
 		flex: 1,
 		// backgroundColor: "#eee",
-		padding: theme.spacing(0),
+		// padding: theme.spacing(4),
+		padding: theme.padding,
 		height: `calc(100% - 48px)`,
 		overflowY: "hidden",
 	},
@@ -38,27 +37,23 @@ const useStyles = makeStyles(theme => ({
 		flexDirection: "column",
 	},
 	welcomeMsg: {
-		backgroundColor: theme.palette.boxticket, 
+		// backgroundColor: "#eee",
+		background: theme.palette.tabHeaderBackground,
 		display: "flex",
 		justifyContent: "space-evenly",
 		alignItems: "center",
 		height: "100%",
 		textAlign: "center",
 	},
+	logo: {
+		logo: theme.logo,
+		content: "url(" + ((theme.appLogoLight || theme.appLogoDark) ? getBackendUrl() + "/public/" + (theme.mode === "light" ? theme.appLogoLight || theme.appLogoDark : theme.appLogoDark || theme.appLogoLight) : (theme.mode === "light" ? logo : logoDark)) + ")"
+	},
 }));
 
 const Chat = () => {
 	const classes = useStyles();
 	const { ticketId } = useParams();
-
-    // Definindo os logos para modo claro e escuro
-    const logoLight = `${process.env.REACT_APP_BACKEND_URL}/public/logotipos/interno.png`;
-    const logoDark = `${process.env.REACT_APP_BACKEND_URL}/public/logotipos/logo_w.png`;
-
-    // Definindo o logo inicial com base no modo de tema atual
-    const initialLogo = theme.palette.type === 'light' ? logoLight : logoDark;
-    const [logoImg, setLogoImg] = useState(initialLogo);
-
 
 	return (
 		<div className={classes.chatContainer}>
@@ -74,12 +69,12 @@ const Chat = () => {
 							</>
 						) : (
 							<Paper square variant="outlined" className={classes.welcomeMsg}>
-							
-							<div>
-							 <center><img style={{ margin: "0 auto", width: "80%" }} src={`${logoImg}?r=${Math.random()}`} alt={`${process.env.REACT_APP_NAME_SYSTEM}`} /></center>
-							</div>
-							
-							{/*<span>{i18n.t("chat.noTicketMessage")}</span>*/}
+								<span>
+									<center>
+										<img className={classes.logo} width="50%" alt="" />
+									</center>
+									{i18n.t("chat.noTicketMessage")}
+								</span>
 							</Paper>
 						)}
 					</Grid>

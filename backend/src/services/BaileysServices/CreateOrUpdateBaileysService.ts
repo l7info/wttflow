@@ -1,5 +1,4 @@
 import { Chat, Contact } from "@whiskeysockets/baileys";
-import { isArray } from "lodash";
 import Baileys from "../../models/Baileys";
 
 interface Request {
@@ -10,44 +9,56 @@ interface Request {
 
 const createOrUpdateBaileysService = async ({
   whatsappId,
-  contacts
+  contacts,
+  chats,
 }: Request): Promise<Baileys> => {
-  const baileysExists = await Baileys.findOne({
-    where: { whatsappId }
-  });
 
-  if (!contacts) {
-    return baileysExists;
-  }
-
-  if (baileysExists) {
-    const getContacts = [];
-
-    const baileysContacts = baileysExists.contacts
-      ? JSON.parse(baileysExists.contacts)
-      : [];
-
-    if (isArray(baileysContacts)) {
-      getContacts.push(...baileysContacts);
-    }
-
-    getContacts.push(...contacts);
-    getContacts.sort();
-    getContacts.filter((v, i, a) => a.indexOf(v) === i);
-
-    const newBaileys = await baileysExists.update({
-      contacts: JSON.stringify(getContacts)
+  try {
+    const baileysExists = await Baileys.findOne({
+      where: { whatsappId }
     });
 
-    return newBaileys;
+    if (baileysExists) {
+      const getChats = baileysExists.chats
+        ? JSON.parse(baileysExists.chats)
+        : [];
+      const getContacts = baileysExists.contacts
+        ? JSON.parse(baileysExists.contacts)
+        : [];
+
+      if (chats) {
+        getChats.push(...chats);
+        getChats.sort();
+        const newChats = getChats.filter((v: Chat, i: number, a: Chat[]) => a.findIndex(v2 => (v2.id === v.id)) === i)
+
+        return await baileysExists.update({
+          chats: JSON.stringify(newChats),
+        });
+      }
+
+      if (contacts) {
+        getContacts.push(...contacts);
+        getContacts.sort();
+        const newContacts = getContacts.filter((v: Contact, i: number, a: Contact[]) => a.findIndex(v2 => (v2.id === v.id)) === i)
+
+        return await baileysExists.update({
+          contacts: JSON.stringify(newContacts),
+        });
+      }
+
+    }
+
+    const baileys = await Baileys.create({
+      whatsappId,
+      contacts: JSON.stringify(contacts),
+      chats: JSON.stringify(chats)
+    });
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return baileys;
+  } catch (error) {
+    console.log(error, whatsappId, contacts);
+    throw new Error(error);
   }
-
-  const baileys = await Baileys.create({
-    whatsappId,
-    contacts: JSON.stringify(contacts)
-  });
-
-  return baileys;
 };
 
 export default createOrUpdateBaileysService;

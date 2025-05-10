@@ -13,29 +13,28 @@ interface ScheduleData {
   companyId?: number;
   ticketId?: number;
   userId?: number;
-  geral?: boolean
-  queueId?: number;
-  whatsappId?: number;
-  repeatEvery?:string;
-  repeatDailyInput?:string;
-  repeatCount?:string;
-  selectDaysRecorrenci?: string;
+  ticketUserId?: number | string;
+  queueId?: number | string;
+  openTicket?: string;
+  statusTicket?: string;
+  whatsappId?: number | string;
+  intervalo?: number;
+  valorIntervalo?: number;
+  enviarQuantasVezes?: number;
+  tipoDias?: number;
+  assinar?: boolean;
 }
 
 interface Request {
   scheduleData: ScheduleData;
   id: string | number;
   companyId: number;
-  mediaPath: string | null | undefined;
-  mediaName: string | null | undefined;
 }
 
 const UpdateUserService = async ({
   scheduleData,
   id,
-  companyId,
-  mediaPath,
-  mediaName,
+  companyId
 }: Request): Promise<Schedule | undefined> => {
   const schedule = await ShowService(id, companyId);
 
@@ -54,12 +53,16 @@ const UpdateUserService = async ({
     contactId,
     ticketId,
     userId,
-    geral,
+    ticketUserId,
     queueId,
+    openTicket,
+    statusTicket,
     whatsappId,
-    repeatEvery,
-    selectDaysRecorrenci,
-    repeatCount,
+    intervalo,
+    valorIntervalo,
+    enviarQuantasVezes,
+    tipoDias,
+    assinar
   } = scheduleData;
 
   try {
@@ -75,14 +78,16 @@ const UpdateUserService = async ({
     contactId,
     ticketId,
     userId,
-    geral,
+    ticketUserId,
     queueId,
+    openTicket,
+    statusTicket,
     whatsappId,
-    mediaPath,
-    mediaName,
-    repeatEvery,
-    selectDaysRecorrenci,
-    repeatCount,
+    intervalo,
+    valorIntervalo,
+    enviarQuantasVezes,
+    tipoDias,
+    assinar
   });
 
   await schedule.reload();

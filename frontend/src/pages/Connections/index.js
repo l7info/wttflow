@@ -1,32 +1,29 @@
-import React, { useState, useCallback, useContext } from "react";
+
+import React, { useState, useCallback, useContext, useEffect } from "react";
 import { toast } from "react-toastify";
-import { format, parseISO } from "date-fns";
+import { add, format, parseISO } from "date-fns";
+
+import Menu from "@material-ui/core/Menu";
+import MenuItem from "@material-ui/core/MenuItem";
+import PopupState, { bindTrigger, bindMenu } from "material-ui-popup-state";
+// import { SocketContext } from "../../context/Socket/SocketContext";
 import { makeStyles } from "@material-ui/core/styles";
-import { 
-  green, 
-  blue, 
-  red, 
-  orange,
-  deepPurple,
-  grey,
-} from "@material-ui/core/colors";
+import { green } from "@material-ui/core/colors";
 import {
   Button,
-  Grid,
+  TableBody,
+  TableRow,
+  TableCell,
+  IconButton,
+  Table,
+  TableHead,
+  Paper,
+  Tooltip,
+  Typography,
+  CircularProgress,
+  Box,
   Card,
   CardContent,
-  CardActions,
-  Avatar,
-  Chip,
-  Box,
-  Divider,
-  Typography,
-  Tooltip,
-  CircularProgress,
-  IconButton,
-  LinearProgress,
-  Paper,
-  useTheme
 } from "@material-ui/core";
 import {
   Edit,
@@ -36,20 +33,18 @@ import {
   SignalCellular4Bar,
   CropFree,
   DeleteOutline,
-  Refresh,
-  AddCircleOutline,
-  SettingsBackupRestore,
-  Phone,
-  AccountCircle,
-  Update,
-  Brightness4,
-  Brightness7
+  Facebook,
+  Instagram,
+  WhatsApp,
 } from "@material-ui/icons";
+
+import FacebookLogin from "react-facebook-login/dist/facebook-login-render-props";
 
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
 
 import api from "../../services/api";
 import WhatsAppModal from "../../components/WhatsAppModal";
@@ -60,250 +55,110 @@ import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import toastError from "../../errors/toastError";
 import formatSerializedId from '../../utils/formatSerializedId';
 import { AuthContext } from "../../context/Auth/AuthContext";
+import usePlans from "../../hooks/usePlans";
+import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import ForbiddenPage from "../../components/ForbiddenPage";
 import { Can } from "../../components/Can";
 
-const useStyles = makeStyles(theme => ({
-  root: {
+const useStyles = makeStyles((theme) => ({
+  mainPaper: {
     flex: 1,
-    padding: theme.spacing(3),
-    overflowY: "auto",
+    // padding: theme.spacing(1),
+    padding: theme.padding,
+    overflowY: "scroll",
     ...theme.scrollbarStyles,
-    backgroundColor: theme.palette.background.default,
   },
-  gridContainer: {
-    marginTop: theme.spacing(3),
-  },
-  connectionCard: {
-    borderRadius: 12,
-    boxShadow: theme.shadows[2],
-    transition: "all 0.3s ease",
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    border: `1px solid ${theme.palette.divider}`,
-    "&:hover": {
-      transform: "translateY(-4px)",
-      boxShadow: theme.shadows[6],
-    },
-  },
-  cardHeader: {
-    padding: theme.spacing(2),
-    borderBottom: `1px solid ${theme.palette.divider}`,
-    backgroundColor: theme.palette.background.paper,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+  customTableCell: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardContent: {
-    padding: theme.spacing(2),
-    flexGrow: 1,
-    backgroundColor: theme.palette.background.paper,
-  },
-  cardActions: {
-    padding: theme.spacing(1, 2),
-    borderTop: `1px solid ${theme.palette.divider}`,
-    justifyContent: "flex-end",
-    backgroundColor: theme.palette.background.paper,
-  },
-  avatar: {
-    backgroundColor: theme.palette.primary.main,
-    width: 40,
-    height: 40,
-    fontSize: 16,
-    fontWeight: "bold",
-    color: theme.palette.getContrastText(theme.palette.primary.main),
-  },
-  connectedStatus: {
-    color: theme.palette.type === 'dark' ? green[400] : green[600],
-  },
-  disconnectedStatus: {
-    color: theme.palette.type === 'dark' ? red[400] : red[600],
-  },
-  qrcodeStatus: {
-    color: theme.palette.type === 'dark' ? blue[400] : blue[600],
-  },
-  timeoutStatus: {
-    color: theme.palette.type === 'dark' ? orange[400] : orange[600],
-  },
-  openingStatus: {
-    color: theme.palette.type === 'dark' ? deepPurple[400] : deepPurple[600],
-  },
-  defaultBadge: {
-    backgroundColor: theme.palette.type === 'dark' ? green[800] : green[100],
-    color: theme.palette.type === 'dark' ? green[100] : green[800],
-    padding: "2px 8px",
-    borderRadius: 12,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-    fontWeight: 500,
-    marginLeft: theme.spacing(1),
-    '& .MuiSvgIcon-root': {
-      color: theme.palette.type === 'dark' ? green[300] : green[500],
-      fontSize: 16,
-    }
-  },
-  infoItem: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: theme.spacing(1.5),
-    "& svg": {
-      marginRight: theme.spacing(1.5),
-      color: theme.palette.text.secondary,
-    },
-  },
-  primaryButton: {
-    backgroundColor: theme.palette.primary.main,
-    color: theme.palette.primary.contrastText,
-    "&:hover": {
-      backgroundColor: theme.palette.primary.dark,
-    },
-  },
-  secondaryButton: {
-    backgroundColor: theme.palette.background.paper,
-    border: `1px solid ${theme.palette.divider}`,
-    color: theme.palette.text.secondary,
-    "&:hover": {
-      backgroundColor: theme.palette.action.hover,
-    },
-  },
-  dangerButton: {
-    backgroundColor: theme.palette.background.paper,
-    border: `1px solid ${theme.palette.error.main}`,
-    color: theme.palette.error.main,
-    "&:hover": {
-      backgroundColor: theme.palette.type === 'dark' ? theme.palette.error.dark : theme.palette.error.light,
-    },
-  },
-  headerButtons: {
-    display: "flex",
-    gap: theme.spacing(2),
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    display: "flex",
     justifyContent: "center",
-    padding: theme.spacing(4),
   },
-  emptyState: {
-    padding: theme.spacing(4),
+  tooltip: {
+    backgroundColor: "#f5f5f9",
+    color: "rgba(0, 0, 0, 0.87)",
+    fontSize: theme.typography.pxToRem(14),
+    border: "1px solid #dadde9",
+    maxWidth: 450,
+  },
+  tooltipPopper: {
     textAlign: "center",
-    color: theme.palette.text.secondary,
   },
-  statusIcon: {
-    marginRight: theme.spacing(1.5),
-  },
-  progressBar: {
-    marginTop: theme.spacing(1.5),
-    borderRadius: 4,
-    height: 6,
-  },
-  connectionName: {
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    maxWidth: 120,
-  },
-  toggleThemeButton: {
-    color: theme.palette.text.primary,
+  buttonProgress: {
+    color: green[500],
   },
 }));
 
-const StatusIndicator = ({ status }) => {
-  const classes = useStyles();
-  const theme = useTheme();
-  
-  const getStatusData = () => {
-    switch (status) {
-      case "CONNECTED":
-        return {
-          icon: <SignalCellular4Bar className={classes.statusIcon} />,
-          text: "Conectado",
-          class: classes.connectedStatus,
-          progress: 100,
-        };
-      case "DISCONNECTED":
-        return {
-          icon: <SignalCellularConnectedNoInternet0Bar className={classes.statusIcon} />,
-          text: "Desconectado",
-          class: classes.disconnectedStatus,
-          progress: 0,
-        };
-      case "qrcode":
-        return {
-          icon: <CropFree className={classes.statusIcon} />,
-          text: "QR Code",
-          class: classes.qrcodeStatus,
-          progress: 30,
-        };
-      case "TIMEOUT":
-      case "PAIRING":
-        return {
-          icon: <SignalCellularConnectedNoInternet2Bar className={classes.statusIcon} />,
-          text: "Timeout",
-          class: classes.timeoutStatus,
-          progress: 60,
-        };
-      case "OPENING":
-        return {
-          icon: <CircularProgress size={16} className={classes.statusIcon} />,
-          text: "Conectando",
-          class: classes.openingStatus,
-          progress: 45,
-        };
-      default:
-        return {
-          icon: <SignalCellularConnectedNoInternet0Bar className={classes.statusIcon} />,
-          text: status,
-          class: classes.disconnectedStatus,
-          progress: 0,
-        };
-    }
-  };
-  
-  const statusData = getStatusData();
-  
+function CircularProgressWithLabel(props) {
   return (
-    <Box display="flex" alignItems="center" mb={2}>
-      {React.cloneElement(statusData.icon, { 
-        style: { color: theme.palette[statusData.class.replace(classes.statusIcon, '').trim()] } 
-      })}
-      <Typography variant="body2" className={statusData.class}>
-        {statusData.text}
-      </Typography>
-      <Box flexGrow={1} ml={1.5}>
-        <LinearProgress 
-          variant="determinate" 
-          value={statusData.progress} 
-          className={classes.progressBar}
-          style={{ 
-            backgroundColor: theme.palette.divider,
-          }}
-          classes={{
-            bar: {
-              backgroundColor: theme.palette[statusData.class.replace(classes.statusIcon, '').trim()]
-            }
-          }}
-        />
+    <Box position="relative" display="inline-flex">
+      <CircularProgress variant="determinate" {...props} />
+      <Box
+        top={0}
+        left={0}
+        bottom={0}
+        right={0}
+        position="absolute"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <Typography
+          variant="caption"
+          component="div"
+          color="textSecondary"
+        >{`${Math.round(props.value)}%`}</Typography>
       </Box>
     </Box>
   );
+}
+
+const CustomToolTip = ({ title, content, children }) => {
+  const classes = useStyles();
+
+  return (
+    <Tooltip
+      arrow
+      classes={{
+        tooltip: classes.tooltip,
+        popper: classes.tooltipPopper,
+      }}
+      title={
+        <React.Fragment>
+          <Typography gutterBottom color="inherit">
+            {title}
+          </Typography>
+          {content && <Typography>{content}</Typography>}
+        </React.Fragment>
+      }
+    >
+      {children}
+    </Tooltip>
+  );
+};
+
+const IconChannel = (channel) => {
+  switch (channel) {
+    case "facebook":
+      return <Facebook style={{ color: "#3b5998" }} />;
+    case "instagram":
+      return <Instagram style={{ color: "#e1306c" }} />;
+    case "whatsapp":
+      return <WhatsApp style={{ color: "#25d366" }} />;
+    default:
+      return "error";
+  }
 };
 
 const Connections = () => {
   const classes = useStyles();
-  const theme = useTheme();
 
-  const { user } = useContext(AuthContext);
   const { whatsApps, loading } = useContext(WhatsAppsContext);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
+  const [statusImport, setStatusImport] = useState([]);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedWhatsApp, setSelectedWhatsApp] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const history = useHistory();
   const confirmationModalInitialState = {
     action: "",
     title: "",
@@ -311,23 +166,90 @@ const Connections = () => {
     whatsAppId: "",
     open: false,
   };
-  const [confirmModalInfo, setConfirmModalInfo] = useState(
-    confirmationModalInitialState
-  );
+  const [confirmModalInfo, setConfirmModalInfo] = useState(confirmationModalInitialState);
+  const [planConfig, setPlanConfig] = useState(false);
 
-  const handleStartWhatsAppSession = async whatsAppId => {
+  //   const socketManager = useContext(SocketContext);
+  const { user, socket } = useContext(AuthContext);
+
+  const companyId = user.companyId;
+
+  const { getPlanCompany } = usePlans();
+
+  useEffect(() => {
+    async function fetchData() {
+      const planConfigs = await getPlanCompany(undefined, companyId);
+      setPlanConfig(planConfigs)
+    }
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const responseFacebook = (response) => {
+    if (response.status !== "unknown") {
+      const { accessToken, id } = response;
+
+      api
+        .post("/facebook", {
+          facebookUserId: id,
+          facebookUserToken: accessToken,
+        })
+        .then((response) => {
+          toast.success(i18n.t("connections.facebook.success"));
+        })
+        .catch((error) => {
+          toastError(error);
+        });
+    }
+  };
+
+  const responseInstagram = (response) => {
+    if (response.status !== "unknown") {
+      const { accessToken, id } = response;
+
+      api
+        .post("/facebook", {
+          addInstagram: true,
+          facebookUserId: id,
+          facebookUserToken: accessToken,
+        })
+        .then((response) => {
+          toast.success(i18n.t("connections.facebook.success"));
+        })
+        .catch((error) => {
+          toastError(error);
+        });
+    }
+  };
+
+  useEffect(() => {
+    // const socket = socketManager.GetSocket();
+    socket.on(`importMessages-${user.companyId}`, (data) => {
+      if (data.action === "refresh") {
+        setStatusImport([]);
+        history.go(0);
+      }
+      if (data.action === "update") {
+        setStatusImport(data.status);
+      }
+    });
+
+    /* return () => {
+      socket.disconnect();
+    }; */
+  }, [whatsApps]);
+
+  const handleStartWhatsAppSession = async (whatsAppId) => {
     try {
       await api.post(`/whatsappsession/${whatsAppId}`);
-      toast.info(i18n.t("connections.toasts.connecting"));
     } catch (err) {
       toastError(err);
     }
   };
 
-  const handleRequestNewQrCode = async whatsAppId => {
+  const handleRequestNewQrCode = async (whatsAppId) => {
     try {
       await api.put(`/whatsappsession/${whatsAppId}`);
-      toast.info(i18n.t("connections.toasts.requestingQr"));
     } catch (err) {
       toastError(err);
     }
@@ -343,7 +265,7 @@ const Connections = () => {
     setSelectedWhatsApp(null);
   }, [setSelectedWhatsApp, setWhatsAppModalOpen]);
 
-  const handleOpenQrModal = whatsApp => {
+  const handleOpenQrModal = (whatsApp) => {
     setSelectedWhatsApp(whatsApp);
     setQrModalOpen(true);
   };
@@ -353,9 +275,13 @@ const Connections = () => {
     setQrModalOpen(false);
   }, [setQrModalOpen, setSelectedWhatsApp]);
 
-  const handleEditWhatsApp = whatsApp => {
+  const handleEditWhatsApp = (whatsApp) => {
     setSelectedWhatsApp(whatsApp);
     setWhatsAppModalOpen(true);
+  };
+
+  const openInNewTab = url => {
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleOpenConfirmationModal = (action, whatsAppId) => {
@@ -376,6 +302,14 @@ const Connections = () => {
         whatsAppId: whatsAppId,
       });
     }
+    if (action === "closedImported") {
+      setConfirmModalInfo({
+        action: action,
+        title: i18n.t("connections.confirmationModal.closedImportedTitle"),
+        message: i18n.t("connections.confirmationModal.closedImportedMessage"),
+        whatsAppId: whatsAppId,
+      });
+    }
     setConfirmModalOpen(true);
   };
 
@@ -383,7 +317,6 @@ const Connections = () => {
     if (confirmModalInfo.action === "disconnect") {
       try {
         await api.delete(`/whatsappsession/${confirmModalInfo.whatsAppId}`);
-        toast.success(i18n.t("connections.toasts.disconnected"));
       } catch (err) {
         toastError(err);
       }
@@ -397,78 +330,142 @@ const Connections = () => {
         toastError(err);
       }
     }
+    if (confirmModalInfo.action === "closedImported") {
+      try {
+        await api.post(`/closedimported/${confirmModalInfo.whatsAppId}`);
+        toast.success(i18n.t("connections.toasts.closedimported"));
+      } catch (err) {
+        toastError(err);
+      }
+    }
 
     setConfirmModalInfo(confirmationModalInitialState);
   };
 
-  const renderCardActions = whatsApp => {
+
+  const renderImportButton = (whatsApp) => {
+    if (whatsApp?.statusImportMessages === "renderButtonCloseTickets") {
+      return (
+        <Button
+          style={{ marginLeft: 12 }}
+          size="small"
+          variant="outlined"
+          color="primary"
+          onClick={() => {
+            handleOpenConfirmationModal("closedImported", whatsApp.id);
+          }}
+        >
+          {i18n.t("connections.buttons.closedImported")}
+        </Button>
+      );
+    }
+
+    if (whatsApp?.importOldMessages) {
+      let isTimeStamp = !isNaN(
+        new Date(Math.floor(whatsApp?.statusImportMessages)).getTime()
+      );
+
+      if (isTimeStamp) {
+        const ultimoStatus = new Date(
+          Math.floor(whatsApp?.statusImportMessages)
+        ).getTime();
+        const dataLimite = +add(ultimoStatus, { seconds: +35 }).getTime();
+        if (dataLimite > new Date().getTime()) {
+          return (
+            <>
+              <Button
+                disabled
+                style={{ marginLeft: 12 }}
+                size="small"
+                endIcon={
+                  <CircularProgress
+                    size={12}
+                    className={classes.buttonProgress}
+                  />
+                }
+                variant="outlined"
+                color="primary"
+              >
+                {i18n.t("connections.buttons.preparing")}
+              </Button>
+            </>
+          );
+        }
+      }
+    }
+  };
+
+  const renderActionButtons = (whatsApp) => {
     return (
       <>
         {whatsApp.status === "qrcode" && (
-          <Button
-            size="small"
-            variant="contained"
-            className={classes.primaryButton}
-            startIcon={<CropFree />}
-            onClick={() => handleOpenQrModal(whatsApp)}
-            fullWidth
-          >
-            {i18n.t("connections.buttons.qrcode")}
-          </Button>
+          <Can
+            role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
+            perform="connections-page:addConnection"
+            yes={() => (
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                onClick={() => handleOpenQrModal(whatsApp)}
+              >
+                {i18n.t("connections.buttons.qrcode")}
+              </Button>
+            )}
+          />
         )}
         {whatsApp.status === "DISCONNECTED" && (
-          <Grid container spacing={1}>
-            <Grid item xs={6}>
-              <Button
-                size="small"
-                variant="contained"
-                className={classes.secondaryButton}
-                startIcon={<Refresh />}
-                onClick={() => handleStartWhatsAppSession(whatsApp.id)}
-                fullWidth
-              >
-                {i18n.t("connections.buttons.tryAgain")}
-              </Button>
-            </Grid>
-            <Grid item xs={6}>
-              <Button
-                size="small"
-                variant="contained"
-                className={classes.primaryButton}
-                startIcon={<CropFree />}
-                onClick={() => handleRequestNewQrCode(whatsApp.id)}
-                fullWidth
-              >
-                {i18n.t("connections.buttons.newQr")}
-              </Button>
-            </Grid>
-          </Grid>
+          <Can
+            role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
+            perform="connections-page:addConnection"
+            yes={() => (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => handleStartWhatsAppSession(whatsApp.id)}
+                >
+                  {i18n.t("connections.buttons.tryAgain")}
+                </Button>{" "}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => handleRequestNewQrCode(whatsApp.id)}
+                >
+                  {i18n.t("connections.buttons.newQr")}
+                </Button>
+              </>
+            )}
+          />
         )}
         {(whatsApp.status === "CONNECTED" ||
           whatsApp.status === "PAIRING" ||
           whatsApp.status === "TIMEOUT") && (
-          <Button
-            size="small"
-            variant="contained"
-            className={classes.dangerButton}
-            startIcon={<SignalCellularConnectedNoInternet0Bar />}
-            onClick={() => {
-              handleOpenConfirmationModal("disconnect", whatsApp.id);
-            }}
-            fullWidth
-          >
-            {i18n.t("connections.buttons.disconnect")}
-          </Button>
-        )}
+            <Can
+              role={user.profile}
+              perform="connections-page:addConnection"
+              yes={() => (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => {
+                      handleOpenConfirmationModal("disconnect", whatsApp.id);
+                    }}
+                  >
+                    {i18n.t("connections.buttons.disconnect")}
+                  </Button>
+
+                  {renderImportButton(whatsApp)}
+                </>
+              )}
+            />
+          )}
         {whatsApp.status === "OPENING" && (
-          <Button 
-            size="small" 
-            variant="contained" 
-            disabled 
-            className={classes.secondaryButton}
-            startIcon={<CircularProgress size={14} />}
-            fullWidth
-          >
+          <Button size="small" variant="outlined" disabled color="default">
             {i18n.t("connections.buttons.connecting")}
           </Button>
         )}
@@ -476,21 +473,54 @@ const Connections = () => {
     );
   };
 
+  const renderStatusToolTips = (whatsApp) => {
+    return (
+      <div className={classes.customTableCell}>
+        {whatsApp.status === "DISCONNECTED" && (
+          <CustomToolTip
+            title={i18n.t("connections.toolTips.disconnected.title")}
+            content={i18n.t("connections.toolTips.disconnected.content")}
+          >
+            <SignalCellularConnectedNoInternet0Bar color="secondary" />
+          </CustomToolTip>
+        )}
+        {whatsApp.status === "OPENING" && (
+          <CircularProgress size={24} className={classes.buttonProgress} />
+        )}
+        {whatsApp.status === "qrcode" && (
+          <CustomToolTip
+            title={i18n.t("connections.toolTips.qrcode.title")}
+            content={i18n.t("connections.toolTips.qrcode.content")}
+          >
+            <CropFree />
+          </CustomToolTip>
+        )}
+        {whatsApp.status === "CONNECTED" && (
+          <CustomToolTip title={i18n.t("connections.toolTips.connected.title")}>
+            <SignalCellular4Bar style={{ color: green[500] }} />
+          </CustomToolTip>
+        )}
+        {(whatsApp.status === "TIMEOUT" || whatsApp.status === "PAIRING") && (
+          <CustomToolTip
+            title={i18n.t("connections.toolTips.timeout.title")}
+            content={i18n.t("connections.toolTips.timeout.content")}
+          >
+            <SignalCellularConnectedNoInternet2Bar color="secondary" />
+          </CustomToolTip>
+        )}
+      </div>
+    );
+  };
+
   const restartWhatsapps = async () => {
+
     try {
       await api.post(`/whatsapp-restart/`);
-      toast.warn(i18n.t("Aguarde... reiniciando..."));
+      toast.success(i18n.t("connections.waitConnection"));
     } catch (err) {
       toastError(err);
     }
   }
-
-  const formatConnectionName = (name) => {
-    if (name.length > 9) {
-      return `${name.substring(0, 9)}...`;
-    }
-    return name;
-  };
 
   return (
     <MainContainer>
@@ -502,171 +532,249 @@ const Connections = () => {
       >
         {confirmModalInfo.message}
       </ConfirmationModal>
-      <QrcodeModal
-        open={qrModalOpen}
-        onClose={handleCloseQrModal}
-        whatsAppId={!whatsAppModalOpen && selectedWhatsApp?.id}
-      />
+      {qrModalOpen && (
+        <QrcodeModal
+          open={qrModalOpen}
+          onClose={handleCloseQrModal}
+          whatsAppId={!whatsAppModalOpen && selectedWhatsApp?.id}
+        />
+      )}
       <WhatsAppModal
         open={whatsAppModalOpen}
         onClose={handleCloseWhatsAppModal}
         whatsAppId={!qrModalOpen && selectedWhatsApp?.id}
       />
-      <MainHeader>
-        <Title>{i18n.t("connections.title")}</Title>
-        <MainHeaderButtonsWrapper>
-          <Can
-            role={user.profile}
-            perform="connections-page:addConnection"
-            yes={() => (
-              <div className={classes.headerButtons}>
-                <Button
-                  variant="contained"
-                  className={classes.primaryButton}
-                  startIcon={<AddCircleOutline />}
-                  onClick={handleOpenWhatsAppModal}
-                >
-                  {i18n.t("connections.buttons.add")}
-                </Button>
-                <Button
-                  variant="contained"
-                  className={classes.secondaryButton}
-                  startIcon={<SettingsBackupRestore />}
-                  onClick={restartWhatsapps}
-                >
-                  {i18n.t("connections.buttons.restart")}
-                </Button>
-                <IconButton
-                  className={classes.toggleThemeButton}
-                  onClick={() => theme.toggleTheme && theme.toggleTheme()}
-                  aria-label="toggle theme"
-                >
-                  {theme.palette.type === 'dark' ? <Brightness7 /> : <Brightness4 />}
-                </IconButton>
-              </div>
-            )}
-          />
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      
-      <Paper className={classes.root} elevation={0}>
-        {loading ? (
-          <div className={classes.loadingContainer}>
-            <CircularProgress color="primary" />
-          </div>
-        ) : (
-          <>
-            <Box mb={3}>
-              <Typography variant="h6" color="textPrimary">
-                {i18n.t("connections.subtitle")} · {whatsApps?.length || 0} conexões
-              </Typography>
-              <Divider />
-            </Box>
-            
-            {whatsApps?.length > 0 ? (
-              <Grid container spacing={3} className={classes.gridContainer}>
-                {whatsApps.map(whatsApp => (
-                  <Grid item xs={12} sm={6} md={4} lg={3} key={whatsApp.id}>
-                    <Card className={classes.connectionCard}>
-                      <Box className={classes.cardHeader}>
-                        <Box display="flex" alignItems="center" minWidth={0}>
-                          <Avatar className={classes.avatar}>
-                            {whatsApp.name.charAt(0).toUpperCase()}
-                          </Avatar>
-                          <Box ml={1.5} minWidth={0}>
-                            <Tooltip title={whatsApp.name} arrow>
-                              <Typography variant="subtitle1" className={classes.connectionName}>
-                                {formatConnectionName(whatsApp.name)}
-                              </Typography>
-                            </Tooltip>
-                            <Typography variant="caption" color="textSecondary" noWrap>
-                              ID: {whatsApp.id}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        {whatsApp.isDefault && (
-                          <Chip
-                            label="Padrão"
-                            size="small"
-                            icon={<CheckCircle fontSize="small" />}
-                            className={classes.defaultBadge}
+      {user.profile === "user" && user.allowConnections === "disabled" ?
+        <ForbiddenPage />
+        :
+        <>
+          <MainHeader>
+            <Title>{i18n.t("connections.title")} ({whatsApps.length})</Title>
+            <MainHeaderButtonsWrapper>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={restartWhatsapps}
+              >
+                {i18n.t("connections.restartConnections")}
+              </Button>
+
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => openInNewTab(`https://wa.me/${process.env.REACT_APP_NUMBER_SUPPORT}`)}
+              >
+                {i18n.t("connections.callSupport")}
+              </Button>
+              <PopupState variant="popover" popupId="demo-popup-menu">
+                {(popupState) => (
+                  <React.Fragment>
+                    <Can
+                      role={user.profile}
+                      perform="connections-page:addConnection"
+                      yes={() => (
+                        <>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            {...bindTrigger(popupState)}
+                          >
+                            {i18n.t("connections.newConnection")}
+                          </Button>
+                          <Menu {...bindMenu(popupState)}>
+                            {/* WHATSAPP */}
+                            <MenuItem
+                              disabled={planConfig?.plan?.useWhatsapp ? false : true}
+                              onClick={() => {
+                                handleOpenWhatsAppModal();
+                                popupState.close();
+                              }}
+                            >
+                              <WhatsApp
+                                fontSize="small"
+                                style={{
+                                  marginRight: "10px",
+                                  color: "#25D366",
+                                }}
+                              />
+                              WhatsApp
+                            </MenuItem>
+                            {/* FACEBOOK */}
+                            <FacebookLogin
+                              appId={process.env.REACT_APP_FACEBOOK_APP_ID}
+                              autoLoad={false}
+                              fields="name,email,picture"
+                              version="9.0"
+                              scope={process.env.REACT_APP_REQUIRE_BUSINESS_MANAGEMENT?.toUpperCase() === "TRUE" ?
+                                "public_profile,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement,business_management"
+                                : "public_profile,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"}
+                              callback={responseFacebook}
+                              render={(renderProps) => (
+                                <MenuItem
+                                  disabled={planConfig?.plan?.useFacebook ? false : true}
+                                  onClick={renderProps.onClick}
+                                >
+                                  <Facebook
+                                    fontSize="small"
+                                    style={{
+                                      marginRight: "10px",
+                                      color: "#3b5998",
+                                    }}
+                                  />
+                                  Facebook
+                                </MenuItem>
+                              )}
+                            />
+                            {/* INSTAGRAM */}
+                            <FacebookLogin
+                              appId={process.env.REACT_APP_FACEBOOK_APP_ID}
+                              autoLoad={false}
+                              fields="name,email,picture"
+                              version="9.0"
+                              scope={process.env.REACT_APP_REQUIRE_BUSINESS_MANAGEMENT?.toUpperCase() === "TRUE" ?
+                                "public_profile,instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement,business_management"
+                                : "public_profile,instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"}
+                              callback={responseInstagram}
+                              render={(renderProps) => (
+                                <MenuItem
+                                  disabled={planConfig?.plan?.useInstagram ? false : true}
+                                  onClick={renderProps.onClick}
+                                >
+                                  <Instagram
+                                    fontSize="small"
+                                    style={{
+                                      marginRight: "10px",
+                                      color: "#e1306c",
+                                    }}
+                                  />
+                                  Instagram
+                                </MenuItem>
+                              )}
+                            />
+                          </Menu>
+                        </>
+                      )}
+                    />
+                  </React.Fragment>
+                )}
+              </PopupState>
+            </MainHeaderButtonsWrapper>
+          </MainHeader>
+
+          {
+            statusImport?.all ? (
+              <>
+                <div style={{ margin: "auto", marginBottom: 12 }}>
+                  <Card className={classes.root}>
+                    <CardContent className={classes.content}>
+                      <Typography component="h5" variant="h5">
+
+                        {statusImport?.this === -1 ? i18n.t("connections.buttons.preparing") : i18n.t("connections.buttons.importing")}
+
+                      </Typography>
+                      {statusImport?.this === -1 ?
+                        <Typography component="h6" variant="h6" align="center">
+
+                          <CircularProgress
+                            size={24}
                           />
-                        )}
-                      </Box>
-                      
-                      <CardContent className={classes.cardContent}>
-                        <StatusIndicator status={whatsApp.status} />
-                        
-                        <Box className={classes.infoItem}>
-                          <Phone fontSize="small" />
-                          <Typography variant="body2" noWrap>
-                            {whatsApp.number ? (
-                              <Tooltip title={whatsApp.number} arrow>
-                                <span>{formatSerializedId(whatsApp.number)}</span>
-                              </Tooltip>
-                            ) : (
-                              "Número não definido"
+
+                        </Typography>
+                        :
+                        <>
+                          <Typography component="h6" variant="h6" align="center">
+                            {`${i18n.t(`connections.typography.processed`)} ${statusImport?.this} ${i18n.t(`connections.typography.in`)} ${statusImport?.all}  ${i18n.t(`connections.typography.date`)}: ${statusImport?.date} `}
+                          </Typography>
+                          <Typography align="center">
+                            <CircularProgressWithLabel
+                              style={{ margin: "auto" }}
+                              value={(statusImport?.this / statusImport?.all) * 100}
+                            />
+                          </Typography>
+                        </>
+                      }
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            ) : null
+          }
+
+          <Paper className={classes.mainPaper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell align="center">Channel</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.name")}</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.number")}</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.status")}</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.session")}</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.lastUpdate")}</TableCell>
+                  <TableCell align="center">{i18n.t("connections.table.default")}</TableCell>
+                  <Can
+                    role={user.profile === "user" && user.allowConnections === "enabled" ? "admin" : user.profile}
+                    perform="connections-page:addConnection"
+                    yes={() => (
+                      <TableCell align="center">{i18n.t("connections.table.actions")}</TableCell>
+                    )}
+                  />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loading ? (
+                  <TableRowSkeleton />
+                ) : (
+                  <>
+                    {whatsApps?.length > 0 &&
+                      whatsApps.map((whatsApp) => (
+                        <TableRow key={whatsApp.id}>
+                          <TableCell align="center">{IconChannel(whatsApp.channel)}</TableCell>
+                          <TableCell align="center">{whatsApp.name}</TableCell>
+                          <TableCell align="center">{whatsApp.number && whatsApp.channel === 'whatsapp' ? (<>{formatSerializedId(whatsApp.number)}</>) : whatsApp.number}</TableCell>
+                          <TableCell align="center">{renderStatusToolTips(whatsApp)}</TableCell>
+                          <TableCell align="center">{renderActionButtons(whatsApp)}</TableCell>
+                          <TableCell align="center">{format(parseISO(whatsApp.updatedAt), "dd/MM/yy HH:mm")}</TableCell>
+                          <TableCell align="center">
+                            {whatsApp.isDefault && (
+                              <div className={classes.customTableCell}>
+                                <CheckCircle style={{ color: green[500] }} />
+                              </div>
                             )}
-                          </Typography>
-                        </Box>
-                        
-                        <Box className={classes.infoItem}>
-                          <Update fontSize="small" />
-                          <Typography variant="body2">
-                            {format(parseISO(whatsApp.updatedAt), "dd/MM/yyyy HH:mm")}
-                          </Typography>
-                        </Box>
-                      </CardContent>
-                      
-                      <CardActions className={classes.cardActions}>
-                        <Box width="100%">
-                          {renderCardActions(whatsApp)}
-                          
+                          </TableCell>
                           <Can
                             role={user.profile}
-                            perform="connections-page:editOrDeleteConnection"
+                            perform="connections-page:addConnection"
                             yes={() => (
-                              <Box mt={1} display="flex" justifyContent="space-between">
-                                <Button
+                              <TableCell align="center">
+                                <IconButton
                                   size="small"
-                                  startIcon={<Edit />}
                                   onClick={() => handleEditWhatsApp(whatsApp)}
-                                  color="primary"
                                 >
-                                  Editar
-                                </Button>
-                                <Button
+                                  <Edit />
+                                </IconButton>
+
+                                <IconButton
                                   size="small"
-                                  startIcon={<DeleteOutline />}
-                                  onClick={() => handleOpenConfirmationModal("delete", whatsApp.id)}
-                                  color="secondary"
+                                  onClick={(e) => {
+                                    handleOpenConfirmationModal("delete", whatsApp.id);
+                                  }}
                                 >
-                                  Excluir
-                                </Button>
-                              </Box>
+                                  <DeleteOutline />
+                                </IconButton>
+                              </TableCell>
                             )}
                           />
-                        </Box>
-                      </CardActions>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            ) : (
-              <Box className={classes.emptyState}>
-                <AccountCircle style={{ fontSize: 60, color: theme.palette.text.disabled }} />
-                <Typography variant="h6" gutterBottom>
-                  Nenhuma conexão encontrada
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Clique no botão "Adicionar Conexão" para começar
-                </Typography>
-              </Box>
-            )}
-          </>
-        )}
-      </Paper>
-    </MainContainer>
+                        </TableRow>
+                      ))}
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </Paper>
+        </>
+      }
+    </MainContainer >
+
   );
 };
 

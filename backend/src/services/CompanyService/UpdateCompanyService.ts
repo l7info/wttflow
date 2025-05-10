@@ -1,8 +1,7 @@
 import AppError from "../../errors/AppError";
 import Company from "../../models/Company";
 import Setting from "../../models/Setting";
-import Invoices from "../../models/Invoices";
-import Plan from "../../models/Plan";
+import User from "../../models/User";
 
 interface CompanyData {
   name: string;
@@ -14,11 +13,15 @@ interface CompanyData {
   campaignsEnabled?: boolean;
   dueDate?: string;
   recurrence?: string;
+  document?: string;
+  paymentMethod?: string;
+  password?: string;
 }
 
 const UpdateCompanyService = async (
   companyData: CompanyData
 ): Promise<Company> => {
+
   const company = await Company.findByPk(companyData.id);
   const {
     name,
@@ -28,46 +31,40 @@ const UpdateCompanyService = async (
     planId,
     campaignsEnabled,
     dueDate,
-    recurrence
+    recurrence,
+    document,
+    paymentMethod,
+    password
   } = companyData;
 
   if (!company) {
     throw new AppError("ERR_NO_COMPANY_FOUND", 404);
   }
 
-  const openInvoices = await Invoices.findAll({
+  const existUser = await User.findOne({
     where: {
-      status: "open",
       companyId: company.id,
-    },
- });
+      email: email
+    }
+  });
 
- if (openInvoices.length > 1) {
-  for (const invoice of openInvoices.slice(1)) {
-    await invoice.update({ status: "cancelled" });
+  if (existUser && existUser.email !== company.email) {
+    throw new AppError("Usuário já existe com esse e-mail!", 404)
   }
-}
 
-const plan = await Plan.findByPk(planId);
+  const user = await User.findOne({
+    where: {
+      companyId: company.id,
+      email: company.email
+    }
+  });
 
-if (!plan) {
-  throw new Error("Plano Não Encontrado.");
-}
-
-
-  // 5. Atualizar a única invoice com status "open" existente, baseada no companyId.
-  const openInvoice = openInvoices[0];
-  
-  if (openInvoice) {
-    await openInvoice.update({
-      value: plan.value,
-      detail: plan.name,
-      dueDate: dueDate,
-    });
-  
-  } else {
-    throw new Error("Nenhuma fatura em aberto para este cliente!");
+  if (!user) {
+    throw new AppError("ERR_NO_USER_FOUND", 404)
   }
+  
+  await user.update({ email, password });
+
 
   await company.update({
     name,
@@ -76,7 +73,9 @@ if (!plan) {
     status,
     planId,
     dueDate,
-    recurrence
+    recurrence,
+    document,
+    paymentMethod
   });
 
   if (companyData.campaignsEnabled !== undefined) {

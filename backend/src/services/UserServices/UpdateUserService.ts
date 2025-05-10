@@ -12,9 +12,22 @@ interface UserData {
   profile?: string;
   companyId?: number;
   queueIds?: number[];
+  startWork?: string;
+  endWork?: string;
+  farewellMessage?: string;
   whatsappId?: number;
-  SuperIs?: boolean;
   allTicket?: string;
+  defaultTheme?: string;
+  defaultMenu?: string;
+  allowGroup?: boolean;
+  allHistoric?: string;
+  allUserChat?: string;
+  userClosePendingTicket?: string;
+  showDashboard?: string;
+  defaultTicketsManagerWidth?: number;
+  allowRealTime?: string;
+  allowConnections?: string;
+  profileImage?: string;
 }
 
 interface Request {
@@ -37,7 +50,7 @@ const UpdateUserService = async ({
   companyId,
   requestUserId
 }: Request): Promise<Response | undefined> => {
-  const user = await ShowUserService(userId);
+  const user = await ShowUserService(userId, companyId);
 
   const requestUser = await User.findByPk(requestUserId);
 
@@ -47,25 +60,42 @@ const UpdateUserService = async ({
 
   const schema = Yup.object().shape({
     name: Yup.string().min(2),
+    allHistoric: Yup.string(),
     email: Yup.string().email(),
     profile: Yup.string(),
-    password: Yup.string(),
-	allTicket: Yup.string()
+    password: Yup.string()
   });
 
-  const { email, password, profile, name, queueIds = [], whatsappId, SuperIs, allTicket } = userData;
+  const oldUserEmail = user.email;
+  
+  const {
+    email,
+    password,
+    profile,
+    name,
+    queueIds = [],
+    startWork,
+    endWork,
+    farewellMessage,
+    whatsappId,
+    allTicket,
+    defaultTheme,
+    defaultMenu,
+    allowGroup,
+    allHistoric,
+    allUserChat,
+    userClosePendingTicket,
+    showDashboard,
+    allowConnections,
+    defaultTicketsManagerWidth = 550,
+    allowRealTime,
+    profileImage
+  } = userData;
 
   try {
-    await schema.validate({ email, password, profile, name, allTicket });
+    await schema.validate({ email, password, profile, name });
   } catch (err: any) {
     throw new AppError(err.message);
-  }
-
-  let updatedProfile = profile; // Initialize a new variable to store the updated value
-
-
-  if (SuperIs == true) {
-  	updatedProfile = "admin"; // Update the new variable instead of the constant
   }
 
   await user.update({
@@ -73,9 +103,22 @@ const UpdateUserService = async ({
     password,
     profile,
     name,
+    startWork,
+    endWork,
+    farewellMessage,
     whatsappId: whatsappId || null,
-    super: SuperIs ? SuperIs : false,
-	allTicket
+    allTicket,
+    defaultTheme,
+    defaultMenu,
+    allowGroup,
+    allHistoric,
+    allUserChat,
+    userClosePendingTicket,
+    showDashboard,
+    defaultTicketsManagerWidth,
+    allowRealTime,
+    profileImage,
+    allowConnections
   });
 
   await user.$set("queues", queueIds);
@@ -84,15 +127,35 @@ const UpdateUserService = async ({
 
   const company = await Company.findByPk(user.companyId);
 
+  if (company.email === oldUserEmail) {
+    await company.update({
+      email,
+      password
+    })
+  }
+  
   const serializedUser = {
     id: user.id,
     name: user.name,
     email: user.email,
     profile: user.profile,
     companyId: user.companyId,
-    super: user.super,
     company,
-    queues: user.queues
+    queues: user.queues,
+    startWork: user.startWork,
+    endWork: user.endWork,
+    greetingMessage: user.farewellMessage,
+    allTicket: user.allTicket,
+    defaultMenu: user.defaultMenu,
+    defaultTheme: user.defaultTheme,
+    allowGroup: user.allowGroup,
+    allHistoric: user.allHistoric,
+    userClosePendingTicket: user.userClosePendingTicket,
+    showDashboard: user.showDashboard,
+    defaultTicketsManagerWidth: user.defaultTicketsManagerWidth,
+    allowRealTime: user.allowRealTime,
+    allowConnections: user.allowConnections,
+    profileImage: user.profileImage
   };
 
   return serializedUser;

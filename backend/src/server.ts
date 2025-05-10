@@ -1,39 +1,37 @@
+import 'dotenv/config';
 import gracefulShutdown from "http-graceful-shutdown";
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { databaseConfig } from './config/database';
+import app from "./app";
+import cron from "node-cron";
 import { initIO } from "./libs/socket";
-import { logger } from "./utils/logger";
+import logger from "./utils/logger";
 import { StartAllWhatsAppsSessions } from "./services/WbotServices/StartAllWhatsAppsSessions";
 import Company from "./models/Company";
+import BullQueue from './libs/queue';
+
 import { startQueueProcess } from "./queues";
-import { TransferTicketQueue } from "./wbotTransferTicketQueue";
-import cron from "node-cron";
+// import { ScheduledMessagesJob, ScheduleMessagesGenerateJob, ScheduleMessagesEnvioJob, ScheduleMessagesEnvioForaHorarioJob } from "./wbotScheduledMessages";
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Inicializar TypeORM
-  await TypeOrmModule.forRoot(databaseConfig);
+const server = app.listen(process.env.PORT, async () => {
+  const companies = await Company.findAll({
+    where: { status: true },
+    attributes: ["id"]
+  });
 
-  const server = await app.listen(process.env.PORT, async () => {
-  const companies = await Company.findAll();
   const allPromises: any[] = [];
   companies.map(async c => {
-  
-  	if(c.status === true){  
-    	const promise = StartAllWhatsAppsSessions(c.id);
-    	allPromises.push(promise);
-    }else{
-    	logger.info(`Empresa INATIVA: ${c.id} | ${c.name}`);
-    }
-  
+    const promise = StartAllWhatsAppsSessions(c.id);
+    allPromises.push(promise);
   });
 
-  Promise.all(allPromises).then(() => {
-    startQueueProcess();
+  Promise.all(allPromises).then(async () => {
+
+    await startQueueProcess();
   });
+
+  if (process.env.REDIS_URI_ACK && process.env.REDIS_URI_ACK !== '') {
+    BullQueue.process();
+  }
+
   logger.info(`Server started on port: ${process.env.PORT}`);
 });
 
@@ -52,29 +50,32 @@ process.on("unhandledRejection", (reason, p) => {
   process.exit(1);
 });
 
+// cron.schedule("* * * * * *", async () => {
 
-cron.schedule("*/5 * * * *", async () => {  // De 1 minuto para 5 minutos
-  try {
-    logger.info(`Serviço de transferência de tickets iniciado`);
-    await TransferTicketQueue();
-  } catch (error) {
-    logger.error("Error in cron job:", error);
-  }
-});
+//   try {
+//     // console.log("Running a job at 5 minutes at America/Sao_Paulo timezone")
+//     await ScheduledMessagesJob();
+//     await ScheduleMessagesGenerateJob();
+//   }
+//   catch (error) {
+//     logger.error(error);
+//   }
 
+// });
 
+// cron.schedule("* * * * * *", async () => {
+
+//   try {
+//     // console.log("Running a job at 01:00 at America/Sao_Paulo timezone")
+//     console.log("Running a job at 2 minutes at America/Sao_Paulo timezone")
+//     await ScheduleMessagesEnvioJob();
+//     await ScheduleMessagesEnvioForaHorarioJob()
+//   }
+//   catch (error) {
+//     logger.error(error);
+//   }
+
+// });
 
 initIO(server);
-
-// Configure graceful shutdown to handle all outstanding promises
-gracefulShutdown(server, {
-  signals: "SIGINT SIGTERM",
-  timeout: 30000, // 30 seconds
-  onShutdown: async () => {
-    logger.info("Gracefully shutting down...");
-    // Add any other cleanup code here, if necessary
-  },
-  finally: () => {
-    logger.info("Server shutdown complete.");
-  }
-});
+gracefulShutdown(server);

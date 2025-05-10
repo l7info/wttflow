@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-
+import { parseISO, format } from "date-fns";
 import * as Yup from "yup";
 import { Formik, FieldArray, Form, Field } from "formik";
 import { toast } from "react-toastify";
@@ -16,12 +16,14 @@ import Typography from "@material-ui/core/Typography";
 import IconButton from "@material-ui/core/IconButton";
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import CircularProgress from "@material-ui/core/CircularProgress";
-import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
+
 import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import { TagsContainer } from "../TagsContainer";
+// import AsyncSelect from "../AsyncSelect";
 
 const useStyles = makeStyles(theme => ({
 	root: {
@@ -53,20 +55,13 @@ const useStyles = makeStyles(theme => ({
 	},
 }));
 
-const phoneRegExp =
-  /^((\\+[1-9]{1,4}[ \\-]*)|(\\([0-9]{2,3}\\)[ \\-]*)|([0-9]{2,4})[ \\-]*)*?[0-9]{3,4}?[ \\-]*[0-9]{3,4}?$/;
-  
 const ContactSchema = Yup.object().shape({
-  name: Yup.string()
-    .min(2, "Too Short!")
-    .max(50, "Too Long!")
-    .required("Required"),
-  number: Yup.string()
-    .min(12, "Número inválido")
-    .max(16, "Número inválido")
-    .matches(phoneRegExp, "Número inválido")
-    .required("Informe o número"),
-  email: Yup.string().email("Email inválido"),
+	name: Yup.string()
+		.min(2, "Too Short!")
+		.max(250, "Too Long!")
+		.required("Required"),
+	number: Yup.string().min(8, "Too Short!").max(50, "Too Long!"),
+	email: Yup.string().email("Invalid email"),
 });
 
 const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
@@ -77,11 +72,12 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		name: "",
 		number: "",
 		email: "",
-		disableBot: false
+		disableBot: false,
+		lgpdAcceptedAt: ""
 	};
 
 	const [contact, setContact] = useState(initialState);
-
+	const [disableBot, setDisableBot] = useState(false);
 	useEffect(() => {
 		return () => {
 			isMounted.current = false;
@@ -101,8 +97,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 			try {
 				const { data } = await api.get(`/contacts/${contactId}`);
 				if (isMounted.current) {
-					console.log(data)
 					setContact(data);
+					setDisableBot(data.disableBot)
 				}
 			} catch (err) {
 				toastError(err);
@@ -120,10 +116,10 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 	const handleSaveContact = async values => {
 		try {
 			if (contactId) {
-				await api.put(`/contacts/${contactId}`, values);
+				await api.put(`/contacts/${contactId}`, { ...values, disableBot: disableBot });
 				handleClose();
 			} else {
-				const { data } = await api.post("/contacts", values);
+				const { data } = await api.post("/contacts", { ...values, disableBot: disableBot });
 				if (onSave) {
 					onSave(data);
 				}
@@ -154,7 +150,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 						}, 400);
 					}}
 				>
-					{({ values, errors, touched, isSubmitting }) => (
+					{({ values, errors, touched, isSubmitting, setFieldValue }) => (
 						<Form>
 							<DialogContent dividers>
 								<Typography variant="subtitle1" gutterBottom>
@@ -177,7 +173,7 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 									name="number"
 									error={touched.number && Boolean(errors.number)}
 									helperText={touched.number && errors.number}
-									placeholder="5541998608485"
+									placeholder="5513912344321"
 									variant="outlined"
 									margin="dense"
 								/>
@@ -194,23 +190,47 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										variant="outlined"
 									/>
 								</div>
-								<>
-								<FormControlLabel
-									label={i18n.t("contactModal.form.disableBot")}
-									labelPlacement="start"
-									control={
-										<Switch
-											size="small"
-											checked={values.disableBot}
-											onChange={() =>
-                        setContact({ ...values, disableBot: !values.disableBot })
-											}
-											name="disableBot"
-											color="primary"
-										/>
-									}
-								/>
-								</>
+								<div>
+									<TagsContainer contact={contact} className={classes.textField} />
+								</div>
+								<Typography
+									style={{ marginBottom: 8, marginTop: 12 }}
+									variant="subtitle1"
+								>
+									<Switch
+										size="small"
+										checked={disableBot}
+										onChange={() =>
+											setDisableBot(!disableBot)
+										}
+										name="disableBot"
+									/>
+									{i18n.t("contactModal.form.chatBotContact")}
+								</Typography>
+								<Typography
+									style={{ marginBottom: 8, marginTop: 12 }}
+									variant="subtitle1"
+								>
+									{i18n.t("contactModal.form.whatsapp")} {contact?.whatsapp ? contact?.whatsapp.name : ""}
+								</Typography>
+								<Typography
+									style={{ marginBottom: 8, marginTop: 12 }}
+									variant="subtitle1"
+								>
+									{i18n.t("contactModal.form.termsLGDP")} {contact?.lgpdAcceptedAt ? format(new Date(contact?.lgpdAcceptedAt), "dd/MM/yyyy 'às' HH:mm") : ""}
+								</Typography>
+
+								{/* <Typography variant="subtitle1" gutterBottom>{i18n.t("contactModal.form.customer_portfolio")}</Typography> */}
+								{/* <div style={{ marginTop: 10 }}>
+									<AsyncSelect url="/users" dictKey={"users"}
+										initialValue={values.user} width="100%" label={i18n.t("contactModal.form.attendant")}
+										onChange={(event, value) => setFieldValue("userId", value ? value.id : null)} />
+								</div>
+								<div style={{ marginTop: 10 }}>
+									<AsyncSelect url="/queue" dictKey={null}
+										initialValue={values.queue} width="100%" label={i18n.t("contactModal.form.queue")}
+										onChange={(event, value) => setFieldValue("queueId", value ? value.id : null)} />
+								</div> */}
 								<Typography
 									style={{ marginBottom: 8, marginTop: 12 }}
 									variant="subtitle1"
